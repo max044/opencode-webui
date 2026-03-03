@@ -64,7 +64,6 @@ RUN chmod +x /usr/local/bin/setup.sh /usr/local/bin/start.sh && \
     mkdir -p /var/lib/mongodb && \
     chown -R opencode:opencode /var/lib/mongodb /var/log/mongodb
 
-USER opencode
 WORKDIR /home/opencode
 EXPOSE ${PORT}
 

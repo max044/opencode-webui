@@ -4,24 +4,32 @@
 
 echo "--- 🛠️ Initializing Persistent Server ---"
 
-# 1. Fix permissions (Railway volumes are mounted as root)
-sudo chown -R opencode:opencode /home/opencode
+# 1. Fix permissions (Cloud volumes are often mounted as root)
+# When running as root in start.sh, we can fix these permissions directly.
+chown -R opencode:opencode /home/opencode
 
 # 2. Ensure essential directories exist
 mkdir -p /home/opencode/workspace
 mkdir -p /home/opencode/mongodb-data
+chown -R opencode:opencode /home/opencode/workspace /home/opencode/mongodb-data
 
 # 3. Handle data directory for OpenCode
 export OPENCODE_DATA_DIR=${OPENCODE_DATA_DIR:-/home/opencode/.opencode}
 mkdir -p "$OPENCODE_DATA_DIR"
+chown -R opencode:opencode "$OPENCODE_DATA_DIR"
 
 # 4. Start MongoDB in background
 echo "🍃 Starting MongoDB..."
 # Clean up potential stale lock files
 rm -f /home/opencode/mongodb-data/mongod.lock
 
-# Try to start mongod. If it fails, log the error.
-mongod --dbpath /home/opencode/mongodb-data --logpath /home/opencode/mongodb.log --bind_ip 127.0.0.1 --fork --logappend || {
+# Try to start mongod as opencode user.
+# Using --fork requires the logpath to be writable.
+touch /home/opencode/mongodb.log
+chown opencode:opencode /home/opencode/mongodb.log
+
+# Start MongoDB as opencode user
+runuser -u opencode -- mongod --dbpath /home/opencode/mongodb-data --logpath /home/opencode/mongodb.log --bind_ip 127.0.0.1 --fork --logappend || {
     echo "⚠️ MongoDB failed to start with --fork. Checking logs..."
     tail -n 20 /home/opencode/mongodb.log
 }

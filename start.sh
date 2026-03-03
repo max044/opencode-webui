@@ -37,4 +37,11 @@ if [ ! -f "$OPCODE_BIN" ]; then
     exit 1
 fi
 
-exec "$OPCODE_BIN" web --port "${PORT:-4096}" --hostname "0.0.0.0"
+# Ensure opencode user owns the config directories inside their home
+mkdir -p /home/opencode/.config
+chown -R opencode:opencode /home/opencode/.config
+
+# Dropping to opencode user to run the web interface
+# We use runuser to maintain environment variables while switching UID
+export HOME=/home/opencode
+exec runuser -u opencode -- "$OPCODE_BIN" web --port "${PORT:-4096}" --hostname "0.0.0.0"

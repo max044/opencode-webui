@@ -195,9 +195,9 @@ No additional secrets needed - uses `GITHUB_TOKEN` automatically!
 
 ## Beam.cloud Deployment (Guides)
 
-Beam.cloud allows us to deploy the OpenCode WebUI environment and securely
-expose common web development ports for live previews (like Vite, React, Python
-APIs).
+Beam.cloud allows us to deploy the OpenCode WebUI environment as a dedicated
+Pod, ensuring persistence and exposing multiple development ports for live
+previews (like Vite, React, Python APIs).
 
 ### Prerequisites
 
@@ -208,35 +208,26 @@ APIs).
 
 ### Deployment Steps
 
-This setup uses a `beam.Pod` to keep the environment running continuously and
-exposes multiple ports for your projects.
+1. **Configure Secrets**: Before deploying, go to the **Secrets** section in
+   your Beam.cloud dashboard and add the following:
+   - `OPENCODE_SERVER_PASSWORD`: Your secure password (required for login).
+   - `GITHUB_REPO_URL`: (Optional) URL of the repository to clone on startup.
+   - `GITHUB_TOKEN`: Your GitHub token for AI sync and private repos.
 
-1. **Update `app.py`**: Before deploying, edit the `app.py` file to set your
-   GitHub username in the `base_image` URL:
-   ```python
-   image=beam.Image(
-       base_image="ghcr.io/YOUR_GITHUB_USER/opencode-webui:latest"
-   )
-   ```
-
-2. **Configure Secrets**: In the Beam.cloud dashboard (under Secrets), add the
-   following necessary environment variables:
-   - `OPENCODE_SERVER_PASSWORD`: Your secure password.
-   - `GITHUB_REPO_URL`: (Optional) URL of the code you want the AI to work on.
-   - `GITHUB_TOKEN`: Your GitHub token for the "Auto-Save" AI skill.
-
-3. **Deploy the Pod**: Run the following command in the terminal to deploy your
-   environment:
+2. **Deploy the Pod**: Run the following command in the terminal to build the
+   image and deploy the environment:
    ```bash
-   beam deploy app.py
+   uv run app.py
    ```
+   _Note: Using `uv run` ensures all dependencies are handled. The configuration
+   in `app.py` builds the image directly from the local `Dockerfile`._
 
-> [!TIP]
-> **Previews**: The `app.py` configuration automatically exposes common
-> development ports (`3000`, `5173`, `8000`, `8080`) alongside the main OpenCode
-> port (`4096`). When you run `npm run dev` inside OpenCode on port 5173, Beam
-> will provide a public URL for that specific port, allowing you to preview your
-> frontend live!
+3. **Access & Previews**: Once deployed, Beam will provide multiple URLs. Use
+   the one mapped to port **4096** for the main interface.
+   - The Pod is configured with 4 CPUs and 8GB of RAM for a smooth experience.
+   - Common ports (`3000`, `5173`, `8000`, `8080`) are pre-exposed. When you run
+     a dev server inside OpenCode, it will be instantly accessible via its
+     respective Beam URL.
 
 ---
 **That's it!** Once the deployment is finished:
