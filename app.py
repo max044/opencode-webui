@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import httpx
-from supabase import create_client, Client
+from supabase import create_client, Client, ClientOptions
 
 # --- Configuration & Images ---
 
@@ -81,11 +81,16 @@ api.add_middleware(
 
 
 # Supabase Client for metadata management
-def get_supabase():
+def get_supabase(auth_header: str = None):
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     if not url or not key:
         return None
+
+    if auth_header:
+        return create_client(
+            url, key, options=ClientOptions(headers={"Authorization": auth_header})
+        )
     return create_client(url, key)
 
 
@@ -110,15 +115,26 @@ async def create_project(request: Request):
         raise HTTPException(status_code=400, detail="Missing user_id or name")
 
     # 1. Fetch user profile keys
-    sb_client = get_supabase()
-    user_profile = (
-        sb_client.table("profiles").select("*").eq("id", user_id).single().execute()
-    )
-    if not user_profile.data:
-        raise HTTPException(status_code=404, detail="User profile not found")
+    auth_header = request.headers.get("Authorization")
+    sb_client = get_supabase(auth_header)
+    if not sb_client:
+        raise HTTPException(
+            status_code=500, detail="Orchestrator is missing Supabase credentials."
+        )
 
-    neon_key = user_profile.data.get("neon_api_key")
-    github_token = user_profile.data.get("github_token")
+    user_profile = (
+        sb_client.table("profiles")
+        .select("*")
+        .eq("id", user_id)
+        .maybe_single()
+        .execute()
+    )
+
+    neon_key = None
+    github_token = None
+    if user_profile and user_profile.data:
+        neon_key = user_profile.data.get("neon_api_key")
+        github_token = user_profile.data.get("github_token")
 
     if not neon_key or not github_token:
         # Fallback to system keys if user hasn't provided their own
@@ -135,9 +151,8 @@ async def create_project(request: Request):
     new_project = {
         "user_id": user_id,
         "name": project_name,
-        "repo_url": repo_url,
-        "db_connection_string": neon_project_id,  # Simplified for now
-        "status": "provisioning",
+        "github_repo": repo_url,
+        "status": "creating",
     }
     res = sb_client.table("projects").insert(new_project).execute()
     project_id = res.data[0]["id"]
@@ -147,6 +162,9 @@ async def create_project(request: Request):
         sb = beam.Sandbox(
             image=sandbox_image,
             name=f"project-{project_id}",
+            cpu=1,
+            memory=1024,
+            keep_warm_seconds=300,
             env={
                 "OPENCODE_GITHUB_URL": repo_url,
                 "DATABASE_URL": f"postgresql://postgres:postgres@.../{neon_project_id}",
@@ -154,14 +172,16 @@ async def create_project(request: Request):
             },
         ).create()
 
+        sandbox_url = sb.expose_port(4096)
+
         # 6. Update project with sandbox info
         sb_client.table("projects").update(
-            {"status": "active", "sandbox_id": sb.id}
+            {"status": "active", "sandbox_id": sb.sandbox_id()}
         ).eq("id", project_id).execute()
 
         return {
             "project": res.data[0],
-            "sandbox_url": f"https://{sb.id}.beam.cloud",
+            "sandbox_url": sandbox_url,
             "message": "Project created successfully",
         }
     except Exception as e:
@@ -180,6 +200,12 @@ async def create_project(request: Request):
     name="opencode-orchestrator",
     image=orchestrator_image,
     volumes=[beam.Volume(name="orchestrator-data", mount_path="/data")],
+    secrets=[
+        "SUPABASE_URL",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "NEON_API_KEY",
+        "GH_PAT",
+    ],
     authorized=False,
 )
 def web_server():

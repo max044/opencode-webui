@@ -8,7 +8,8 @@ export async function createProject(name: string) {
 	const response = await fetch(`${env.PUBLIC_ORCHESTRATOR_URL}/projects/create`, {
 		method: 'POST',
 		headers: {
-			'Content-Type': 'application/json'
+			'Content-Type': 'application/json',
+			'Authorization': `Bearer ${session.access_token}`
 		},
 		body: JSON.stringify({
 			user_id: session.user.id,
