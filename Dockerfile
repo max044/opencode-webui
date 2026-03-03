@@ -1,108 +1,61 @@
-FROM ubuntu:24.04
+FROM python:3.13-slim-bookworm
 
-# Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PORT=4096
 
-# Install base dependencies and tools
-RUN apt-get update && apt-get install -y \
-    software-properties-common \
-    curl \
-    wget \
-    git \
-    build-essential \
-    ca-certificates \
-    unzip \
-    zip \
-    jq \
-    htop \
-    tmux \
-    openssh-client \
-    rclone \
-    magic-wormhole \
-    && rm -rf /var/lib/apt/lists/*
+# 1. Dépendances système (Optimisé)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl wget git build-essential ca-certificates unzip zip jq htop tmux openssh-client rclone sudo \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Add deadsnakes PPA for Python 3.13
-RUN add-apt-repository -y ppa:deadsnakes/ppa && \
-    apt-get update && apt-get install -y \
-    python3.13 \
-    python3.13-venv \
-    python3.13-dev \
-    && apt-get install -y python3-pip \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set Python 3.13 as default and create alias
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.13 1 && \
-    ln -sf /usr/bin/python3.13 /usr/bin/python
-
-# Create opencode user and workspace
+# 2. Création de l'utilisateur
 RUN useradd -m -s /bin/bash opencode && \
-    mkdir -p /home/opencode/workspace && \
-    chown -R opencode:opencode /home/opencode && \
-    apt-get update && apt-get install -y sudo && \
-    echo "opencode ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/opencode && \
-    chmod 0440 /etc/sudoers.d/opencode && \
-    rm -rf /var/lib/apt/lists/*
+    echo "opencode ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/opencode
 
-# Copy opencode config to workspace
-COPY opencode.json /home/opencode/workspace/
-RUN chown opencode:opencode /home/opencode/workspace/opencode.json
-
-# Set working directory
+USER opencode
 WORKDIR /home/opencode/workspace
 
-# Install Node.js (LTS)
+# Configuration du PATH
+ENV PATH="/home/opencode/.local/bin:/home/opencode/.cargo/bin:/home/opencode/.bun/bin:/usr/local/go/bin:${PATH}"
+
+# 3. Installations des outils (Node, Bun, UV, Rust, Go)
+USER root
 RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
-    apt-get install -y nodejs && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends nodejs && \
+    # Cloudflared (Preview)
+    curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb && \
+    dpkg -i cloudflared.deb && rm cloudflared.deb && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install Bun
-RUN curl -fsSL https://bun.sh/install | bash
-ENV PATH="${PATH}:/root/.bun/bin"
+USER opencode
+RUN curl -fsSL https://bun.sh/install | bash && \
+    curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
-# Install uv (Python package manager)
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="${PATH}:/root/.cargo/bin"
-
-# Install Go (multi-arch)
-RUN if [ "$(uname -m)" = "aarch64" ]; then \
-      GOARCH=arm64; \
-    elif [ "$(uname -m)" = "x86_64" ]; then \
-      GOARCH=amd64; \
-    else \
-      GOARCH=$(uname -m); \
-    fi && \
-    wget https://go.dev/dl/go1.23.5.linux-${GOARCH}.tar.gz && \
-    rm -rf /usr/local/go && tar -C /usr/local -xzf go1.23.5.linux-${GOARCH}.tar.gz && \
+USER root
+RUN ARCH=$(uname -m) && \
+    case "${ARCH}" in \
+    aarch64) GOARCH='arm64' ;; \
+    x86_64) GOARCH='amd64' ;; \
+    *) echo "Unsupported architecture: ${ARCH}"; exit 1 ;; \
+    esac && \
+    wget -q https://go.dev/dl/go1.23.5.linux-${GOARCH}.tar.gz && \
+    tar -C /usr/local -xzf go1.23.5.linux-${GOARCH}.tar.gz && \
     rm go1.23.5.linux-${GOARCH}.tar.gz
-ENV PATH="${PATH}:/usr/local/go/bin"
 
-# Install Rust
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="${PATH}:/root/.cargo/bin"
+# 4. OpenCode CLI (Installed from official source: https://opencode.ai/install)
+USER opencode
+RUN curl -fsSL https://opencode.ai/install | bash
 
-# Install OpenCode CLI
-RUN curl -fsSL https://opencode.ai/install | bash && \
-    export PATH="${PATH}:$(find /root -name opencode -type f -executable 2>/dev/null | xargs dirname | head -1)" || true
-ENV PATH="${PATH}:/root/.local/bin:/root/.opencode/bin"
-
-# Verify installations
-RUN echo "=== Python ===" && python3 --version && \
-    echo "=== Node.js ===" && node --version && \
-    echo "=== npm ===" && npm --version && \
-    echo "=== Bun ===" && bun --version && \
-    echo "=== uv ===" && uv --version && \
-    echo "=== Go ===" && go version && \
-    echo "=== Rust ===" && rustc --version && \
-    echo "=== Cargo ===" && cargo --version && \
-    echo "=== OpenCode ===" && opencode --version && \
-    echo "=== Rclone ===" && rclone version
-
-# Set proper permissions for workspace
-RUN chown -R opencode:opencode /home/opencode/workspace
-
-# Switch to opencode user
+# 5. Automation Scripts
+USER root
+COPY setup.sh start.sh ./
+RUN chmod +x setup.sh start.sh && chown opencode:opencode setup.sh start.sh
 USER opencode
 
-# Set entrypoint and default command
-ENTRYPOINT ["opencode"]
-CMD ["web", "--port", "4096", "--hostname", "0.0.0.0"]
+EXPOSE 4096
+
+CMD ["bash", "./start.sh"]
+
+
+

@@ -1,18 +1,21 @@
 # OpenCode WebUI Workspace
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/opencode-webui-workspace?referralCode=Z1xivh&utm_medium=integration&utm_source=template&utm_campaign=generic)
-
-A containerized development environment running OpenCode WebUI with comprehensive tooling support. This Docker image includes Python, Node.js, Bun, Go, Rust, and essential development tools, all running under a non-root `opencode` user with sudo privileges.
+A containerized development environment running OpenCode WebUI with
+comprehensive tooling support. This Docker image includes Python, Node.js, Bun,
+Go, Rust, and essential development tools, all running under a non-root
+`opencode` user with sudo privileges.
 
 ## Features
 
 - **OpenCode WebUI** (v1.1.25) - AI-powered code editor
-- **Python 3.13.11** with `python` alias
-- **Node.js 24.13.0** with npm 11.6.2
-- **Bun 1.3.6** - Fast JavaScript runtime
-- **Go 1.23.5** - Systems programming language
-- **Rust 1.92.0** with Cargo - Systems programming language
-- **uv 0.9.26** - Python package manager
+- **Lightweight Architecture**: Based on `python:3.13-slim-bookworm` (Debian)
+  for maximum efficiency on Railway.
+- **Python 3.13** (Pre-installed)
+- **Node.js 24.x (LTS)**
+- **Bun 1.3.x**
+- **Go 1.23.5**
+- **Rust 1.92.x**
+- **uv** Python package manager
 - **Non-root user** (`opencode`) with passwordless sudo access
 - **Pre-configured workspace** at `/home/opencode/workspace`
 
@@ -58,7 +61,8 @@ OPENCODE_HOSTNAME=0.0.0.0
 ```
 
 - **OPENCODE_SERVER_USERNAME**: Default login username (default: `opencode`)
-- **OPENCODE_SERVER_PASSWORD**: Secure password for the server (required for authentication)
+- **OPENCODE_SERVER_PASSWORD**: Secure password for the server (required for
+  authentication)
 - **OPENCODE_PORT**: Port to listen on (default: 4096)
 - **OPENCODE_HOSTNAME**: Hostname/IP to bind to (default: 0.0.0.0)
 
@@ -72,11 +76,14 @@ docker run -p 4096:4096 \
   opencode-webui-workspace:latest
 ```
 
-The `workspace` directory will be created on your host machine automatically on first run. Inside the container, all your work is stored in `/home/opencode/workspace`.
+The `workspace` directory will be created on your host machine automatically on
+first run. Inside the container, all your work is stored in
+`/home/opencode/workspace`.
 
 ### Docker Compose Example
 
 Run with:
+
 ```bash
 docker-compose up -d
 ```
@@ -135,6 +142,7 @@ wormhole              # Secure file transfer
 ## User & Permissions
 
 The container runs as the `opencode` user (UID: varies) with:
+
 - Full access to `/home/opencode/workspace`
 - Passwordless sudo privileges for system administration
 - Shell: `/bin/bash`
@@ -143,7 +151,8 @@ This ensures security while allowing necessary system operations.
 
 ## File Structure
 
-The container provides a clean workspace at `/home/opencode/workspace/`. You can create your own directory structure:
+The container provides a clean workspace at `/home/opencode/workspace/`. You can
+create your own directory structure:
 
 ```
 /home/opencode/workspace/
@@ -155,7 +164,9 @@ The container provides a clean workspace at `/home/opencode/workspace/`. You can
 
 ## Publishing Images
 
-The repository includes a GitHub Actions workflow (`.github/workflows/publish.yml`) that automatically:
+The repository includes a GitHub Actions workflow
+(`.github/workflows/publish.yml`) that automatically:
+
 - Publishes to GitHub Container Registry (GHCR)
 - Supports multiple platforms (linux/amd64, linux/arm64)
 - Tags images with git refs and semver tags
@@ -163,6 +174,7 @@ The repository includes a GitHub Actions workflow (`.github/workflows/publish.ym
 ### Automatic Publishing
 
 Images are automatically published on:
+
 - Push to `main` branch (tagged as `latest`)
 - Push of version tags (v1.0.0, v2.0.0, etc.)
 - Manual workflow dispatch from Actions tab
@@ -175,13 +187,51 @@ No additional secrets needed - uses `GITHUB_TOKEN` automatically!
 - 4GB+ available disk space for image
 - ~500MB for runtime data
 
-## License
+## Railway Deployment (Beginner Friendly)
 
-OpenCode and included tools follow their respective licenses.
+Deploy your own AI development environment in 3 simple steps:
+
+### 1. Connect & Deploy
+
+Connect this repository to a new project on [Railway](https://railway.app/).
+
+### 2. Set 3 Variables
+
+In your Railway project settings, add these **Variables**:
+
+- `OPENCODE_SERVER_PASSWORD`: Your chosen password to access the interface.
+- `GITHUB_REPO_URL`: The URL of the repository you want to work on.
+- `GITHUB_TOKEN`: Your GitHub Personal Access Token (to allow the AI to push
+  changes).
+
+### 3. Add a Volume
+
+Go to **Settings > Volumes** and create a volume mounted on
+`/home/opencode/workspace`. **This is mandatory** to save your projects.
+
+---
+
+**That's it!** Once the deployment is finished:
+
+1. Open your Railway URL.
+2. Log in with the username `opencode` and your password.
+3. Your repository will be automatically cloned and ready for the AI to start
+   coding!
+
+---
+
+### AI-Powered "Auto-Save"
+
+This workspace includes a **Git Sync Skill**. You don't need to know Git
+commands; simply ask the AI to "sync my changes" or "push my work," and it will
+handle everything safely.
+
+---
 
 ## Support
 
 For issues with:
+
 - **OpenCode**: https://github.com/opencodeinc/opencode
 - **This Docker setup**: Check Docker logs with `docker logs <container-id>`
 
@@ -194,18 +244,21 @@ docker run -d -p 4096:4096 --name opencode opencode-webui-workspace:latest
 ```
 
 View logs:
+
 ```bash
 docker logs -f opencode
 ```
 
 Stop:
+
 ```bash
 docker stop opencode
 ```
 
 ### Use with VS Code Dev Containers
 
-Install the "Dev Containers" extension and configure `.devcontainer/devcontainer.json` to use this image.
+Install the "Dev Containers" extension and configure
+`.devcontainer/devcontainer.json` to use this image.
 
 ### Resource Limits
 
