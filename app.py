@@ -10,8 +10,8 @@ app = beam.Pod(
     cpu=4,  # Increased for better performance as a "Lovable" equivalent
     memory="8Gi",
     volumes=[workspace_volume],
-    # Build directly on Beam using the local Dockerfile
-    image=beam.Image(dockerfile="Dockerfile"),
+    # Use the image directly from GHCR as it is built by GitHub Actions
+    image=beam.Image(base_image="ghcr.io/max044/opencode-webui:latest"),
     # Explicitly set the entrypoint to ensure the start script runs
     entrypoint=["bash", "/usr/local/bin/start.sh"],
     # Expose the OpenCode WebUI port and preview ports
