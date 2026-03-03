@@ -6,6 +6,10 @@ set -e
 # 1. Workspace initialization
 echo "Preparing workspace..."
 mkdir -p /home/opencode/workspace
+
+# Fix ownership (Railway volumes are mounted as root)
+sudo chown -R opencode:opencode /home/opencode/workspace
+
 cd /home/opencode/workspace
 
 # 2. Configurer Git (Non-sensible)
@@ -20,7 +24,7 @@ fi
 if [ ! -d ".git" ]; then
     if [ ! -z "$GITHUB_REPO_URL" ]; then
         echo "⬇️ First run detected: Initializing workspace from $GITHUB_REPO_URL..."
-        
+
         # Inject token into URL if provided
         REPO_URL=$GITHUB_REPO_URL
         REPO_NAME=$(basename "$REPO_URL" .git)
@@ -32,9 +36,8 @@ if [ ! -d ".git" ]; then
         else
             echo "⚠️ No GITHUB_TOKEN found. Pushing back to GitHub might require manual authentication."
         fi
-        
+
         git clone "$REPO_URL"
-        cd "$REPO_NAME"
         echo "✅ Successfully initialized repository."
     else
         echo "ℹ️ No GITHUB_REPO_URL provided. Workspace initialized as empty."
@@ -44,4 +47,3 @@ else
 fi
 
 echo "Setup complete!"
-

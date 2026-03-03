@@ -54,6 +54,6 @@ RUN chmod +x /usr/local/bin/setup.sh /usr/local/bin/start.sh
 
 USER opencode
 WORKDIR /home/opencode/workspace
-EXPOSE 4096
+EXPOSE ${PORT}
 
 CMD ["bash", "/usr/local/bin/start.sh"]
