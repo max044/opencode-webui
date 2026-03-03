@@ -23,6 +23,7 @@ if [ ! -d ".git" ]; then
         
         # Inject token into URL if provided
         REPO_URL=$GITHUB_REPO_URL
+        REPO_NAME=$(basename "$REPO_URL" .git)
         if [ ! -z "$GITHUB_TOKEN" ]; then
             echo "🔑 GitHub Token found. Cloning securely..."
             # Remove https:// from repo URL to inject token
@@ -32,8 +33,20 @@ if [ ! -d ".git" ]; then
             echo "⚠️ No GITHUB_TOKEN found. Pushing back to GitHub might require manual authentication."
         fi
         
-        git clone "$REPO_URL" .
-        echo "✅ Successfully cloned repository."
+        if [ "$(ls -A .)" ]; then
+            echo "⚠️ Directory is not empty. Initializing git and pulling..."
+            git init
+            git remote add origin "$REPO_URL"
+            git fetch origin
+            # Try to checkout the default branch (main or master)
+            git checkout -t origin/main || git checkout -t origin/master || echo "⚠️ Could not checkout default branch automatically."
+        else
+            echo "✅ Directory is empty. Cloning directly..."
+            git clone "$REPO_URL"
+            cd "$REPO_NAME"
+        fi
+        
+        echo "✅ Successfully initialized repository."
     else
         echo "ℹ️ No GITHUB_REPO_URL provided. Workspace initialized as empty."
     fi
