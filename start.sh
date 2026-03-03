@@ -23,12 +23,12 @@ fi
 echo "👤 Username: ${OPENCODE_SERVER_USERNAME:-opencode}"
 
 # Ensure opencode is in PATH or use absolute path
-OPCODE_BIN=$(command -v opencode || echo "/home/opencode/.local/bin/opencode")
+OPCODE_BIN=$(command -v opencode || echo "/opt/opencode/bin/opencode")
 
 if [ ! -f "$OPCODE_BIN" ]; then
-    # Checking another common path just in case
-    if [ -f "/home/opencode/.opencode/bin/opencode" ]; then
-        OPCODE_BIN="/home/opencode/.opencode/bin/opencode"
+    # Fallback to older paths just in case
+    if [ -f "/home/opencode/.local/bin/opencode" ]; then
+        OPCODE_BIN="/home/opencode/.local/bin/opencode"
     fi
 fi
 

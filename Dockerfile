@@ -4,7 +4,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PORT=4096
 
 # 1. System Dependencies + Node.js + MongoDB + Go
-# Note: Using Ubuntu Jammy repo for MongoDB on Debian 12 as a stable workaround for libssl issues
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl wget git build-essential ca-certificates unzip zip jq htop tmux openssh-client rclone sudo gnupg && \
     # MongoDB 7.0
@@ -35,27 +34,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN useradd -m -s /bin/bash opencode && \
     echo "opencode ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/opencode
 
-# Home path configuration
-ENV PATH="/home/opencode/.local/bin:/home/opencode/.cargo/bin:/home/opencode/.bun/bin:/usr/local/go/bin:${PATH}"
+# 3. Install heavy tools to /opt/ (NOT in /home/opencode, so the volume stays light)
+ENV RUSTUP_HOME=/opt/rust/rustup
+ENV CARGO_HOME=/opt/rust/cargo
+ENV BUN_INSTALL=/opt/bun
+ENV UV_INSTALL_DIR=/opt/uv
 
-# 3. User-level Tools (Bun, UV, Rust, OpenCode)
+RUN mkdir -p /opt/rust /opt/bun /opt/uv /opt/opencode && \
+    chown -R opencode:opencode /opt/rust /opt/bun /opt/uv /opt/opencode
+
 USER opencode
 RUN curl -fsSL https://bun.sh/install | bash && \
     curl -LsSf https://astral.sh/uv/install.sh | sh && \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
     curl -fsSL https://opencode.ai/install | bash
 
-# Create Template for Persistent Home
-# We capture the state of /home/opencode after tools are installed
-USER root
-RUN mkdir -p /usr/local/share/opencode-template && \
-    cp -rp /home/opencode/. /usr/local/share/opencode-template/
+# 4. PATH — all tools accessible regardless of volume mount
+ENV PATH="/opt/opencode/bin:/opt/bun/bin:/opt/rust/cargo/bin:/opt/uv:/home/opencode/.local/bin:/usr/local/go/bin:${PATH}"
 
-# 4. Automation Scripts
+# 5. Automation Scripts + MongoDB dirs
+USER root
 COPY setup.sh /usr/local/bin/setup.sh
 COPY start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/setup.sh /usr/local/bin/start.sh && \
-    # Prepare MongoDB data dir
     mkdir -p /var/lib/mongodb && \
     chown -R opencode:opencode /var/lib/mongodb /var/log/mongodb
 
