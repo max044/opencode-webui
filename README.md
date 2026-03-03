@@ -193,48 +193,55 @@ No additional secrets needed - uses `GITHUB_TOKEN` automatically!
 - 4GB+ available disk space for image
 - ~500MB for runtime data
 
-## Railway Deployment (Guides)
+## Beam.cloud Deployment (Guides)
 
-There are two ways to deploy this environment on Railway:
+Beam.cloud allows us to deploy the OpenCode WebUI environment and securely
+expose common web development ports for live previews (like Vite, React, Python
+APIs).
 
-### Option A: The "Fast" Way (Using Pre-built Image) 🚀
+### Prerequisites
 
-This method is incredibly fast because it downloads the pre-compiled Docker
-image from GitHub instead of building everything from scratch.
+1. Create a [Beam.cloud](https://www.beam.cloud/) account.
+2. Install the Beam CLI:
+   `curl https://raw.githubusercontent.com/slai-labs/get-beam/main/get-beam.sh -sSfL | sh`
+3. Authenticate the CLI: `beam login`
 
-1. In Railway, click **+ New** > **Docker Image**.
-2. Enter the image URL: `ghcr.io/YOUR_GITHUB_USER/opencode-webui:latest`
-   (replace with your actual GitHub username).
-3. Under **Variables**, add:
-   - `OPENCODE_SERVER_PASSWORD`: Your password.
-   - `PORT`: `4096` _(Mandatory. `railway.json` is ignored for external
-     images)._
-   - `GITHUB_REPO_URL`: URL of the code you want the AI to work on.
+### Deployment Steps
+
+This setup uses a `beam.Pod` to keep the environment running continuously and
+exposes multiple ports for your projects.
+
+1. **Update `app.py`**: Before deploying, edit the `app.py` file to set your
+   GitHub username in the `base_image` URL:
+   ```python
+   image=beam.Image(
+       base_image="ghcr.io/YOUR_GITHUB_USER/opencode-webui:latest"
+   )
+   ```
+
+2. **Configure Secrets**: In the Beam.cloud dashboard (under Secrets), add the
+   following necessary environment variables:
+   - `OPENCODE_SERVER_PASSWORD`: Your secure password.
+   - `GITHUB_REPO_URL`: (Optional) URL of the code you want the AI to work on.
    - `GITHUB_TOKEN`: Your GitHub token for the "Auto-Save" AI skill.
-4. Under **Volumes**, add a new volume mounted precisely at `/home/opencode`.
-5. Under **Networking**, click **Generate Domain** so you can access the
-   interface.
 
-### Option B: The "Source" Way (Fork & Deploy) 🛠️
-
-This method builds the Docker image directly on Railway. It is slower (5-8 mins)
-but automatically configures the network via `railway.json`.
-
-1. Click the button at the top of this README, or connect your GitHub fork as a
-   new Railway Project.
-2. Railway will read `railway.json` and automatically set up the port and
-   deployment rules.
-3. Add the same **Variables** and **Volume** (`/home/opencode`) as above.
+3. **Deploy the Pod**: Run the following command in the terminal to deploy your
+   environment:
+   ```bash
+   beam deploy app.py
+   ```
 
 > [!TIP]
-> **Free Plan User?** For Option A, ensure **Sleep Application** is enabled in
-> your Service Settings on Railway to comply with Free Plan serverless
-> requirements. Option B handles this automatically via `railway.json`.
+> **Previews**: The `app.py` configuration automatically exposes common
+> development ports (`3000`, `5173`, `8000`, `8080`) alongside the main OpenCode
+> port (`4096`). When you run `npm run dev` inside OpenCode on port 5173, Beam
+> will provide a public URL for that specific port, allowing you to preview your
+> frontend live!
 
 ---
 **That's it!** Once the deployment is finished:
 
-1. Open your Railway URL.
+1. Open your Beam.cloud provided URL for port 4096.
 2. Log in with the username `opencode` and your password.
 3. Your repository will be automatically cloned and ready for the AI to start
    coding!
