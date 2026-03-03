@@ -15,6 +15,14 @@ fi
 # 2. Start the OpenCode server
 echo "--- 💻 Starting OpenCode Web Interface on port ${PORT:-4096} ---"
 
+# Debug: Confirm authentication variables are set
+if [ ! -z "$OPENCODE_SERVER_PASSWORD" ]; then
+    echo "🔐 OPENCODE_SERVER_PASSWORD is set (${#OPENCODE_SERVER_PASSWORD} chars)"
+else
+    echo "⚠️ OPENCODE_SERVER_PASSWORD is NOT set — login will fail!"
+fi
+echo "👤 Username: ${OPENCODE_SERVER_USERNAME:-opencode}"
+
 # Ensure opencode is in PATH or use absolute path
 OPCODE_BIN=$(command -v opencode || echo "/home/opencode/.local/bin/opencode")
 
