@@ -33,19 +33,8 @@ if [ ! -d ".git" ]; then
             echo "⚠️ No GITHUB_TOKEN found. Pushing back to GitHub might require manual authentication."
         fi
         
-        if [ "$(ls -A .)" ]; then
-            echo "⚠️ Directory is not empty. Initializing git and pulling..."
-            git init
-            git remote add origin "$REPO_URL"
-            git fetch origin
-            # Try to checkout the default branch (main or master)
-            git checkout -t origin/main || git checkout -t origin/master || echo "⚠️ Could not checkout default branch automatically."
-        else
-            echo "✅ Directory is empty. Cloning directly..."
-            git clone "$REPO_URL"
-            cd "$REPO_NAME"
-        fi
-        
+        git clone "$REPO_URL"
+        cd "$REPO_NAME"
         echo "✅ Successfully initialized repository."
     else
         echo "ℹ️ No GITHUB_REPO_URL provided. Workspace initialized as empty."
