@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # OpenCode Automation Wrapper for Railway
-set -e
 
 echo "--- 🚀 Launching OpenCode Automation ---"
 

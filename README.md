@@ -8,6 +8,7 @@ Go, Rust, and essential development tools, all running under a non-root
 ## Features
 
 - **OpenCode WebUI** (v1.1.25) - AI-powered code editor
+- **MongoDB 7.0 (Pre-installed & Running)** - Persistent database
 - **Lightweight Architecture**: Based on `python:3.13-slim-bookworm` (Debian)
   for maximum efficiency on Railway.
 - **Python 3.13** (Pre-installed)
@@ -17,7 +18,7 @@ Go, Rust, and essential development tools, all running under a non-root
 - **Rust 1.92.x**
 - **uv** Python package manager
 - **Non-root user** (`opencode`) with passwordless sudo access
-- **Pre-configured workspace** at `/home/opencode/workspace`
+- **Full persistent home** at `/home/opencode/`
 
 ## Quick Start
 
@@ -58,6 +59,7 @@ OPENCODE_SERVER_PASSWORD=your-secure-password-here
 PORT=4096
 GITHUB_REPO_URL=
 GITHUB_TOKEN=
+OPENCODE_DATA_DIR=/home/opencode/workspace/.opencode
 ```
 
 - **OPENCODE_SERVER_PASSWORD**: Secure password for the server (required for
@@ -66,6 +68,9 @@ GITHUB_TOKEN=
 - **GITHUB_REPO_URL**: (Optional) URL of the repository to clone on startup
 - **GITHUB_TOKEN**: (Optional) Personal access token for private repos and AI
   sync
+- **OPENCODE_DATA_DIR**: (Optional) Directory to store session data. Set to a
+  path inside your volume (like `/home/opencode/workspace/.opencode`) to persist
+  conversations across redeployments.
 
 ## Volume Mounting
 
@@ -206,8 +211,7 @@ image from GitHub instead of building everything from scratch.
      images)._
    - `GITHUB_REPO_URL`: URL of the code you want the AI to work on.
    - `GITHUB_TOKEN`: Your GitHub token for the "Auto-Save" AI skill.
-4. Under **Volumes**, add a new volume mounted precisely at
-   `/home/opencode/workspace`.
+4. Under **Volumes**, add a new volume mounted precisely at `/home/opencode`.
 5. Under **Networking**, click **Generate Domain** so you can access the
    interface.
 
@@ -220,8 +224,7 @@ but automatically configures the network via `railway.json`.
    new Railway Project.
 2. Railway will read `railway.json` and automatically set up the port and
    deployment rules.
-3. Add the same **Variables** and **Volume** (`/home/opencode/workspace`) as
-   above.
+3. Add the same **Variables** and **Volume** (`/home/opencode`) as above.
 
 > [!TIP]
 > **Free Plan User?** For Option A, ensure **Sleep Application** is enabled in
