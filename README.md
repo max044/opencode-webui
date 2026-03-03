@@ -187,37 +187,53 @@ No additional secrets needed - uses `GITHUB_TOKEN` automatically!
 - 4GB+ available disk space for image
 - ~500MB for runtime data
 
-## Railway Deployment (Beginner Friendly)
+## Railway Deployment (Guides)
 
-Deploy your own AI development environment in 3 simple steps:
+There are two ways to deploy this environment on Railway:
 
-### 1. Connect & Deploy
+### Option A: The "Fast" Way (Using Pre-built Image) 🚀
 
-Connect this repository to a new project on [Railway](https://railway.app/).
+This method is incredibly fast because it downloads the pre-compiled Docker
+image from GitHub instead of building everything from scratch.
 
-### 2. Set 3 Variables
+1. In Railway, click **+ New** > **Docker Image**.
+2. Enter the image URL: `ghcr.io/YOUR_GITHUB_USER/opencode-webui:latest`
+   (replace with your actual GitHub username).
+3. Under **Variables**, add:
+   - `OPENCODE_SERVER_PASSWORD`: Your password.
+   - `PORT`: `4096` _(Mandatory. `railway.json` is ignored for external
+     images)._
+   - `GITHUB_REPO_URL`: URL of the code you want the AI to work on.
+   - `GITHUB_TOKEN`: Your GitHub token for the "Auto-Save" AI skill.
+4. Under **Volumes**, add a new volume mounted precisely at
+   `/home/opencode/workspace`.
+5. Under **Networking**, click **Generate Domain** so you can access the
+   interface.
 
-In your Railway project settings, add these **Variables**:
+### Option B: The "Source" Way (Fork & Deploy) 🛠️
 
-- `OPENCODE_SERVER_PASSWORD`: Your chosen password to access the interface.
-- `GITHUB_REPO_URL`: The URL of the repository you want to work on.
-- `GITHUB_TOKEN`: Your GitHub Personal Access Token (to allow the AI to push
-  changes).
+This method builds the Docker image directly on Railway. It is slower (5-8 mins)
+but automatically configures the network via `railway.json`.
 
-### 3. Add a Volume
+1. Click the button at the top of this README, or connect your GitHub fork as a
+   new Railway Project.
+2. Railway will read `railway.json` and automatically set up the port and
+   deployment rules.
+3. Add the same **Variables** and **Volume** (`/home/opencode/workspace`) as
+   above.
 
-Go to **Settings > Volumes** and create a volume mounted on
-`/home/opencode/workspace`. **This is mandatory** to save your projects.
+> [!TIP]
+> **Free Plan User?** For Option A, ensure **Sleep Application** is enabled in
+> your Service Settings on Railway to comply with Free Plan serverless
+> requirements. Option B handles this automatically via `railway.json`.
 
 ---
-
 **That's it!** Once the deployment is finished:
 
 1. Open your Railway URL.
 2. Log in with the username `opencode` and your password.
 3. Your repository will be automatically cloned and ready for the AI to start
    coding!
-
 ---
 
 ### AI-Powered "Auto-Save"

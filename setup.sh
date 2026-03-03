@@ -17,19 +17,28 @@ if [ ! -z "$GIT_USER_EMAIL" ]; then
 fi
 
 # 3. Clone repository automatically
-if [ ! -d ".git" ] && [ ! -z "$GITHUB_REPO_URL" ]; then
-    echo "First run detected. Cloning repository..."
-    
-    # Inject token into URL if provided
-    REPO_URL=$GITHUB_REPO_URL
-    if [ ! -z "$GITHUB_TOKEN" ]; then
-        # Remove https:// from repo URL to inject token
-        CLEAN_URL=$(echo $REPO_URL | sed 's/https:\/\///')
-        REPO_URL="https://${GITHUB_TOKEN}@${CLEAN_URL}"
+if [ ! -d ".git" ]; then
+    if [ ! -z "$GITHUB_REPO_URL" ]; then
+        echo "⬇️ First run detected: Initializing workspace from $GITHUB_REPO_URL..."
+        
+        # Inject token into URL if provided
+        REPO_URL=$GITHUB_REPO_URL
+        if [ ! -z "$GITHUB_TOKEN" ]; then
+            echo "🔑 GitHub Token found. Cloning securely..."
+            # Remove https:// from repo URL to inject token
+            CLEAN_URL=$(echo $REPO_URL | sed 's/https:\/\///')
+            REPO_URL="https://${GITHUB_TOKEN}@${CLEAN_URL}"
+        else
+            echo "⚠️ No GITHUB_TOKEN found. Pushing back to GitHub might require manual authentication."
+        fi
+        
+        git clone "$REPO_URL" .
+        echo "✅ Successfully cloned repository."
+    else
+        echo "ℹ️ No GITHUB_REPO_URL provided. Workspace initialized as empty."
     fi
-    
-    git clone "$REPO_URL" .
-    echo "Successfully cloned repository."
+else
+    echo "✅ Git repository already initialized."
 fi
 
 echo "Setup complete!"
