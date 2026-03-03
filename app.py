@@ -22,14 +22,13 @@ sandbox_image = beam.Image(
 # The Orchestrator Image: Runs the FastAPI app that creates projects
 orchestrator_image = beam.Image(
     python_version="python3.11",
-    commands=["pip install fastapi httpx supabase uvicorn"],
-)
-
-# --- Beam App Definition ---
-
-app = beam.App(
-    name="opencode-orchestrator",
-    volumes=[beam.Volume(name="orchestrator-data", mount_path="/data")],
+    python_packages=[
+        "fastapi",
+        "httpx",
+        "uvicorn",
+        "supabase>=2.0.0",
+        "websockets>=13.0",
+    ],
 )
 
 # --- Integrations ---
@@ -80,10 +79,14 @@ api.add_middleware(
     allow_headers=["*"],
 )
 
+
 # Supabase Client for metadata management
-supabase: Client = create_client(
-    os.environ.get("SUPABASE_URL", ""), os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-)
+def get_supabase():
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not url or not key:
+        return None
+    return create_client(url, key)
 
 
 @api.get("/")
@@ -107,8 +110,9 @@ async def create_project(request: Request):
         raise HTTPException(status_code=400, detail="Missing user_id or name")
 
     # 1. Fetch user profile keys
+    sb_client = get_supabase()
     user_profile = (
-        supabase.table("profiles").select("*").eq("id", user_id).single().execute()
+        sb_client.table("profiles").select("*").eq("id", user_id).single().execute()
     )
     if not user_profile.data:
         raise HTTPException(status_code=404, detail="User profile not found")
@@ -135,44 +139,48 @@ async def create_project(request: Request):
         "db_connection_string": neon_project_id,  # Simplified for now
         "status": "provisioning",
     }
-    res = supabase.table("projects").insert(new_project).execute()
+    res = sb_client.table("projects").insert(new_project).execute()
     project_id = res.data[0]["id"]
 
     # 5. Spawn Beam Sandbox for the project
     try:
-        sandbox = beam.sandbox.create(
+        sb = beam.Sandbox(
             image=sandbox_image,
             name=f"project-{project_id}",
-            # Passing necessary info to the Sandbox
             env={
                 "OPENCODE_GITHUB_URL": repo_url,
                 "DATABASE_URL": f"postgresql://postgres:postgres@.../{neon_project_id}",
                 "PORT": "4096",
             },
-        )
+        ).create()
 
         # 6. Update project with sandbox info
-        supabase.table("projects").update(
-            {"status": "active", "sandbox_id": sandbox.id}
+        sb_client.table("projects").update(
+            {"status": "active", "sandbox_id": sb.id}
         ).eq("id", project_id).execute()
 
         return {
             "project": res.data[0],
-            "sandbox_url": f"https://{sandbox.id}.beam.cloud",
+            "sandbox_url": f"https://{sb.id}.beam.cloud",
             "message": "Project created successfully",
         }
     except Exception as e:
-        supabase.table("projects").update({"status": "error"}).eq(
+        sb_client.table("projects").update({"status": "error"}).eq(
             "id", project_id
         ).execute()
         raise HTTPException(
             status_code=500, detail=f"Sandbox creation failed: {str(e)}"
-        )
+        ) from e
 
 
 # --- Deployment ---
 
 
-@app.asgi(image=orchestrator_image, auth=False)
+@beam.asgi(
+    name="opencode-orchestrator",
+    image=orchestrator_image,
+    volumes=[beam.Volume(name="orchestrator-data", mount_path="/data")],
+    authorized=False,
+)
 def web_server():
     return api

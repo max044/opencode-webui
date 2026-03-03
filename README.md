@@ -1,288 +1,185 @@
-# OpenCode WebUI Workspace
+# OpenCode Platform
 
-A containerized development environment running OpenCode WebUI with
-comprehensive tooling support. This Docker image includes Python, Node.js, Bun,
-Go, Rust, and essential development tools, all running under a non-root
-`opencode` user with sudo privileges.
+A **cloud-native development platform** that provisions isolated coding
+environments on demand. Users can create projects from a dashboard, each getting
+their own Neon database, GitHub repository, and a Beam Sandbox running OpenCode.
 
-## Features
+## Architecture
 
-- **OpenCode WebUI** (v1.1.25) - AI-powered code editor
-- **MongoDB 7.0 (Pre-installed & Running)** - Persistent database
-- **Lightweight Architecture**: Based on `python:3.13-slim-bookworm` (Debian)
-  for maximum efficiency on Railway.
-- **Python 3.13** (Pre-installed)
-- **Node.js 24.x (LTS)**
-- **Bun 1.3.x**
-- **Go 1.23.5**
-- **Rust 1.92.x**
-- **uv** Python package manager
-- **Non-root user** (`opencode`) with passwordless sudo access
-- **Full persistent home** at `/home/opencode/`
-
-## Quick Start
-
-### Basic Usage
-
-```bash
-# Run the OpenCode WebUI
-docker run -p 4096:4096 opencode-webui-workspace:latest
-
-# Access at http://localhost:4096
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Beam.cloud                           │
+│                                                         │
+│  ┌──────────────────┐    ┌──────────────────────────┐  │
+│  │  Dashboard       │    │  Orchestrator            │  │
+│  │  (frontend_      │───▶│  (app.py)                │  │
+│  │  server.py)      │    │  FastAPI + Beam ASGI      │  │
+│  │  SvelteKit SPA   │    └────────────┬─────────────┘  │
+│  └──────────────────┘                 │                 │
+│                                       ▼                 │
+│                        ┌─────────────────────────┐     │
+│                        │  Beam Sandbox (per user) │     │
+│                        │  OpenCode instance       │     │
+│                        └─────────────────────────┘     │
+└─────────────────────────────────────────────────────────┘
+         │                        │
+         ▼                        ▼
+  Supabase (Auth +         Neon DB + GitHub
+  project metadata)        (per project)
 ```
 
-### Interactive Shell
+## Live URLs
 
-```bash
-docker run -it --rm opencode-webui-workspace:latest bash
+| Service          | URL                                                       |
+| ---------------- | --------------------------------------------------------- |
+| **Dashboard**    | `https://opencode-dashboard-1b155fd-v4.app.beam.cloud`    |
+| **Orchestrator** | `https://opencode-orchestrator-8dac31e-v6.app.beam.cloud` |
+
+## Project Structure
+
+```
+opencode-webui/
+├── app.py                   # Beam Orchestrator (FastAPI ASGI)
+├── frontend_server.py       # Beam Dashboard (FastAPI static files)
+├── platform/
+│   └── frontend/            # SvelteKit dashboard
+│       ├── src/
+│       │   └── routes/      # Login, Dashboard pages
+│       ├── build/           # Pre-built static files (git-ignored)
+│       └── .env             # Frontend env (Supabase + Orchestrator URLs)
+└── supabase/
+    └── migrations/          # DB schema (profiles + projects tables)
 ```
 
-### With Environment Variables
+## Prerequisites
 
-```bash
-# Create .env file from template
-cp .env.example .env
-# Edit .env with your secure password
+1. [Beam.cloud](https://www.beam.cloud/) account + CLI installed:
+   ```bash
+   curl https://raw.githubusercontent.com/slai-labs/get-beam/main/get-beam.sh -sSfL | sh
+   beam login
+   ```
 
-# Run with environment variables
-docker run -p 4096:4096 --env-file .env opencode-webui-workspace:latest
+2. [Supabase](https://supabase.com/) project with the schema applied (see below)
+
+3. Add the following **Beam Secrets** in your
+   [Beam Dashboard](https://www.beam.cloud/dashboard/settings/secrets):
+   - `SUPABASE_URL` — Your Supabase project URL
+   - `SUPABASE_SERVICE_ROLE_KEY` — Supabase service role key
+   - `NEON_API_KEY` — [Neon](https://neon.tech) API key for DB provisioning
+   - `GH_PAT` — GitHub Personal Access Token for repo creation
+
+## Supabase Setup
+
+Run this SQL in your
+[Supabase SQL Editor](https://supabase.com/dashboard/project/_/sql):
+
+```sql
+-- Profiles table (stores user API keys)
+CREATE TABLE public.profiles (
+  id UUID REFERENCES auth.users NOT NULL PRIMARY KEY,
+  full_name TEXT,
+  github_token TEXT,
+  neon_api_key TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Projects table
+CREATE TABLE public.projects (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES public.profiles(id) NOT NULL,
+  name TEXT NOT NULL,
+  sandbox_id TEXT,
+  status TEXT DEFAULT 'creating',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
+
+-- Policies
+CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Users can view own projects" ON public.projects FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can create own projects" ON public.projects FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own projects" ON public.projects FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own projects" ON public.projects FOR DELETE USING (auth.uid() = user_id);
+
+-- Auto-create profile on signup
+CREATE OR REPLACE FUNCTION public.handle_new_user() RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, full_name) VALUES (new.id, new.raw_user_meta_data->>'full_name');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 ```
 
-## Configuration
+## Frontend Configuration
 
-### Environment Variables
-
-Create a `.env` file (copy from `.env.example`):
+Update `platform/frontend/.env`:
 
 ```env
-OPENCODE_SERVER_PASSWORD=your-secure-password-here
-PORT=4096
-GITHUB_REPO_URL=
-GITHUB_TOKEN=
-OPENCODE_DATA_DIR=/home/opencode/workspace/.opencode
+PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co
+PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
+PUBLIC_ORCHESTRATOR_URL=https://opencode-orchestrator-8dac31e-v6.app.beam.cloud
 ```
 
-- **OPENCODE_SERVER_PASSWORD**: Secure password for the server (required for
-  authentication)
-- **PORT**: Port to listen on (default: 4096)
-- **GITHUB_REPO_URL**: (Optional) URL of the repository to clone on startup
-- **GITHUB_TOKEN**: (Optional) Personal access token for private repos and AI
-  sync
-- **OPENCODE_DATA_DIR**: (Optional) Directory to store session data. Set to a
-  path inside your volume (like `/home/opencode/workspace/.opencode`) to persist
-  conversations across redeployments.
+## Deployment
 
-## Volume Mounting
-
-Mount the workspace directory to persist your projects and data:
+### Deploy Everything
 
 ```bash
-docker run -p 4096:4096 \
-  -v $(pwd)/workspace:/home/opencode/workspace \
-  opencode-webui-workspace:latest
+# 1. Build the SvelteKit frontend (must be done before every frontend deploy)
+cd platform/frontend && npm run build && cd ../..
+
+# 2. Deploy the dashboard (static files served by FastAPI)
+uv run beam deploy frontend_server.py:dashboard
+
+# 3. Deploy the orchestrator
+uv run beam deploy app.py:web_server
 ```
 
-The `workspace` directory will be created on your host machine automatically on
-first run. Inside the container, all your work is stored in
-`/home/opencode/workspace`.
-
-### Docker Compose Example
-
-Run with:
+### Deploy Orchestrator Only
 
 ```bash
-docker-compose up -d
+uv run beam deploy app.py:web_server
 ```
 
-The `./workspace` directory will be created on your host machine on first run.
-
-## Advanced Usage
-
-### Build Locally
+### Deploy Frontend Only
 
 ```bash
-docker build -t opencode-webui-workspace:latest .
+cd platform/frontend && npm run build && cd ../..
+uv run beam deploy frontend_server.py:dashboard
 ```
 
-### Run with Custom Port
+## How It Works
+
+1. User signs up/logs in via **Magic Link** (Supabase Auth)
+2. User clicks **"New Project"** on the dashboard
+3. Dashboard calls the **Orchestrator** (`POST /projects/create`)
+4. Orchestrator:
+   - Fetches user's API keys from Supabase `profiles`
+   - Provisions a **Neon database** for the project
+   - Creates a private **GitHub repository**
+   - Registers the project in Supabase `projects`
+   - Spawns a **Beam Sandbox** with OpenCode pre-configured
+
+## Local Development
 
 ```bash
-docker run -p 8080:4096 opencode-webui-workspace:latest
+# Start the frontend dev server
+cd platform/frontend && npm run dev
+# → http://localhost:5173
+
+# Run the orchestrator locally
+uv run uvicorn app:api --reload --port 8000
 ```
-
-Access at `http://localhost:8080`
-
-### Override Command
-
-Run an interactive shell instead of the OpenCode WebUI:
-
-```bash
-docker run -it --rm opencode-webui-workspace:latest bash
-```
-
-Run Python directly:
-
-```bash
-docker run -it --rm opencode-webui-workspace:latest python -c "print('Hello from Python 3.13')"
-```
-
-### Development Workflow
-
-```bash
-# Mount workspace and run interactive shell
-docker run -it --rm \
-  -v $(pwd)/workspace:/home/opencode/workspace \
-  opencode-webui-workspace:latest bash
-
-# Inside container, all your tools are available:
-python --version      # Python 3.13.11
-node --version        # v24.13.0
-bun --version         # 1.3.6
-go version            # go1.23.5
-rustc --version       # 1.92.0
-uv --version          # 0.9.26
-rclone version        # Cloud storage sync
-wormhole              # Secure file transfer
-```
-
-## User & Permissions
-
-The container runs as the `opencode` user (UID: varies) with:
-
-- Full access to `/home/opencode/workspace`
-- Passwordless sudo privileges for system administration
-- Shell: `/bin/bash`
-
-This ensures security while allowing necessary system operations.
-
-## File Structure
-
-The container provides a clean workspace at `/home/opencode/workspace/`. You can
-create your own directory structure:
-
-```
-/home/opencode/workspace/
-├── projects/          # Your project files (you create this)
-├── data/              # Your data files (you create this)
-├── logs/              # Your log files (you create this)
-└── opencode.json      # OpenCode configuration (included in image)
-```
-
-## Publishing Images
-
-The repository includes a GitHub Actions workflow
-(`.github/workflows/publish.yml`) that automatically:
-
-- Publishes to GitHub Container Registry (GHCR)
-- Supports multiple platforms (linux/amd64, linux/arm64)
-- Tags images with git refs and semver tags
-
-### Automatic Publishing
-
-Images are automatically published on:
-
-- Push to `main` branch (tagged as `latest`)
-- Push of version tags (v1.0.0, v2.0.0, etc.)
-- Manual workflow dispatch from Actions tab
-
-No additional secrets needed - uses `GITHUB_TOKEN` automatically!
-
-## Requirements
-
-- Docker 20.10+
-- 4GB+ available disk space for image
-- ~500MB for runtime data
-
-## Beam.cloud Deployment (Guides)
-
-Beam.cloud allows us to deploy the OpenCode WebUI environment as a dedicated
-Pod, ensuring persistence and exposing multiple development ports for live
-previews (like Vite, React, Python APIs).
-
-### Prerequisites
-
-1. Create a [Beam.cloud](https://www.beam.cloud/) account.
-2. Install the Beam CLI:
-   `curl https://raw.githubusercontent.com/slai-labs/get-beam/main/get-beam.sh -sSfL | sh`
-3. Authenticate the CLI: `beam login`
-
-### Deployment Steps
-
-1. **Configure Secrets**: Before deploying, go to the **Secrets** section in
-   your Beam.cloud dashboard and add the following:
-   - `OPENCODE_SERVER_PASSWORD`: Your secure password (required for login).
-   - `GITHUB_REPO_URL`: (Optional) URL of the repository to clone on startup.
-   - `GITHUB_TOKEN`: Your GitHub token for AI sync and private repos.
-
-2. **Deploy the Pod**: Run the following command in the terminal to build the
-   image and deploy the environment:
-   ```bash
-   uv run app.py
-   ```
-   _Note: Using `uv run` ensures all dependencies are handled. The configuration
-   in `app.py` builds the image directly from the local `Dockerfile`._
-
-3. **Access & Previews**: Once deployed, Beam will provide multiple URLs. Use
-   the one mapped to port **4096** for the main interface.
-   - The Pod is configured with 4 CPUs and 8GB of RAM for a smooth experience.
-   - Common ports (`3000`, `5173`, `8000`, `8080`) are pre-exposed. When you run
-     a dev server inside OpenCode, it will be instantly accessible via its
-     respective Beam URL.
-
----
-**That's it!** Once the deployment is finished:
-
-1. Open your Beam.cloud provided URL for port 4096.
-2. Log in with the username `opencode` and your password.
-3. Your repository will be automatically cloned and ready for the AI to start
-   coding!
----
-
-### AI-Powered "Auto-Save"
-
-This workspace includes a **Git Sync Skill**. You don't need to know Git
-commands; simply ask the AI to "sync my changes" or "push my work," and it will
-handle everything safely.
-
----
 
 ## Support
 
-For issues with:
-
 - **OpenCode**: https://github.com/opencodeinc/opencode
-- **This Docker setup**: Check Docker logs with `docker logs <container-id>`
-
-## Tips & Tricks
-
-### Keep container running in background
-
-```bash
-docker run -d -p 4096:4096 --name opencode opencode-webui-workspace:latest
-```
-
-View logs:
-
-```bash
-docker logs -f opencode
-```
-
-Stop:
-
-```bash
-docker stop opencode
-```
-
-### Use with VS Code Dev Containers
-
-Install the "Dev Containers" extension and configure
-`.devcontainer/devcontainer.json` to use this image.
-
-### Resource Limits
-
-```bash
-docker run -p 4096:4096 \
-  --memory=4g \
-  --cpus=2 \
-  opencode-webui-workspace:latest
-```
+- **Beam.cloud Docs**: https://docs.beam.cloud
+- **Supabase Docs**: https://supabase.com/docs
