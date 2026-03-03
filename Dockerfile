@@ -12,9 +12,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN useradd -m -s /bin/bash opencode && \
     echo "opencode ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/opencode
 
-USER opencode
-WORKDIR /home/opencode/workspace
-
 # Configuration du PATH
 ENV PATH="/home/opencode/.local/bin:/home/opencode/.cargo/bin:/home/opencode/.bun/bin:/usr/local/go/bin:${PATH}"
 
@@ -22,8 +19,10 @@ ENV PATH="/home/opencode/.local/bin:/home/opencode/.cargo/bin:/home/opencode/.bu
 USER root
 RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
-    # Cloudflared (Preview)
-    curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb && \
+    # Cloudflared (Architecture-aware download)
+    ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then CLOUD_ARCH="amd64"; else CLOUD_ARCH="arm64"; fi && \
+    curl -L "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CLOUD_ARCH}.deb" -o cloudflared.deb && \
     dpkg -i cloudflared.deb && rm cloudflared.deb && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -43,19 +42,18 @@ RUN ARCH=$(uname -m) && \
     tar -C /usr/local -xzf go1.23.5.linux-${GOARCH}.tar.gz && \
     rm go1.23.5.linux-${GOARCH}.tar.gz
 
-# 4. OpenCode CLI (Installed from official source: https://opencode.ai/install)
+# 4. OpenCode CLI
 USER opencode
 RUN curl -fsSL https://opencode.ai/install | bash
 
-# 5. Automation Scripts
+# 5. Automation Scripts (Moved to /usr/local/bin to avoid volume shadowing)
 USER root
-COPY setup.sh start.sh ./
-RUN chmod +x setup.sh start.sh && chown opencode:opencode setup.sh start.sh
-USER opencode
+COPY setup.sh /usr/local/bin/setup.sh
+COPY start.sh /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/setup.sh /usr/local/bin/start.sh
 
+USER opencode
+WORKDIR /home/opencode/workspace
 EXPOSE 4096
 
-CMD ["bash", "./start.sh"]
-
-
-
+CMD ["bash", "/usr/local/bin/start.sh"]
