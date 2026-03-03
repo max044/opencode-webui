@@ -34,25 +34,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN useradd -m -s /bin/bash opencode && \
     echo "opencode ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/opencode
 
-# 3. Install heavy tools to /opt/ (NOT in /home/opencode, so the volume stays light)
+# 3. Install tools and move them to /opt/ (so they aren't hidden by volume)
 ENV RUSTUP_HOME=/opt/rust/rustup
 ENV CARGO_HOME=/opt/rust/cargo
 ENV BUN_INSTALL=/opt/bun
 ENV UV_INSTALL_DIR=/opt/uv
 
-RUN mkdir -p /opt/rust /opt/bun /opt/uv /opt/opencode && \
+RUN mkdir -p /opt/rust /opt/bun /opt/uv /opt/opencode/bin && \
     chown -R opencode:opencode /opt/rust /opt/bun /opt/uv /opt/opencode
 
 USER opencode
 RUN curl -fsSL https://bun.sh/install | bash && \
     curl -LsSf https://astral.sh/uv/install.sh | sh && \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
-    curl -fsSL https://opencode.ai/install | bash
+    # Install opencode and move it to /opt/opencode
+    curl -fsSL https://opencode.ai/install | bash && \
+    # The install script usually puts it in /home/opencode/.local/bin/opencode or /home/opencode/.opencode/bin/opencode
+    mv /home/opencode/.opencode/bin/opencode /opt/opencode/bin/opencode || \
+    mv /home/opencode/.local/bin/opencode /opt/opencode/bin/opencode
 
-# 4. PATH — all tools accessible regardless of volume mount
-ENV PATH="/opt/opencode/bin:/opt/bun/bin:/opt/rust/cargo/bin:/opt/uv:/home/opencode/.local/bin:/usr/local/go/bin:${PATH}"
+# 4. PATH
+ENV PATH="/opt/opencode/bin:/opt/bun/bin:/opt/rust/cargo/bin:/opt/uv:/usr/local/go/bin:${PATH}"
 
-# 5. Automation Scripts + MongoDB dirs
+# 5. Automation Scripts
 USER root
 COPY setup.sh /usr/local/bin/setup.sh
 COPY start.sh /usr/local/bin/start.sh

@@ -17,8 +17,14 @@ mkdir -p "$OPENCODE_DATA_DIR"
 
 # 4. Start MongoDB in background
 echo "🍃 Starting MongoDB..."
-mongod --dbpath /home/opencode/mongodb-data --logpath /home/opencode/mongodb.log --bind_ip 127.0.0.1 --fork 2>/dev/null || \
-    echo "⚠️ MongoDB failed to start (may need more disk space or is already running)"
+# Clean up potential stale lock files
+rm -f /home/opencode/mongodb-data/mongod.lock
+
+# Try to start mongod. If it fails, log the error.
+mongod --dbpath /home/opencode/mongodb-data --logpath /home/opencode/mongodb.log --bind_ip 127.0.0.1 --fork --logappend || {
+    echo "⚠️ MongoDB failed to start with --fork. Checking logs..."
+    tail -n 20 /home/opencode/mongodb.log
+}
 
 # 5. Git configuration
 if [ ! -z "$GIT_USER_NAME" ]; then

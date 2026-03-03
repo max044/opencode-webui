@@ -22,14 +22,19 @@ else
 fi
 echo "👤 Username: ${OPENCODE_SERVER_USERNAME:-opencode}"
 
-# Ensure opencode is in PATH or use absolute path
-OPCODE_BIN=$(command -v opencode || echo "/opt/opencode/bin/opencode")
+# Prioritize the binary path in /opt (not shadowed by volumes)
+OPCODE_BIN="/opt/opencode/bin/opencode"
 
 if [ ! -f "$OPCODE_BIN" ]; then
-    # Fallback to older paths just in case
-    if [ -f "/home/opencode/.local/bin/opencode" ]; then
-        OPCODE_BIN="/home/opencode/.local/bin/opencode"
-    fi
+    echo "⚠️ Binary not found at $OPCODE_BIN, hunting for alternative..."
+    OPCODE_BIN=$(command -v opencode || echo "/home/opencode/.local/bin/opencode")
+fi
+
+echo "📍 Using binary: $OPCODE_BIN"
+
+if [ ! -f "$OPCODE_BIN" ]; then
+    echo "❌ FATAL: OpenCode binary not found!"
+    exit 1
 fi
 
 exec "$OPCODE_BIN" web --port "${PORT:-4096}" --hostname "0.0.0.0"
